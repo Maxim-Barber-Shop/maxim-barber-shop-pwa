@@ -10,7 +10,7 @@ import pluginQuery from '@tanstack/eslint-plugin-query';
 /** @type {import('eslint').FlatConfig[]} */
 export default [
   {
-    ignores: ['node_modules', '.next', 'out', 'dist', '**/*.config.js', '!eslint.config.mjs'],
+    ignores: ['node_modules', '.next', 'out', 'dist', '**/*.config.js', '!eslint.config.mjs', 'components/ui/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
