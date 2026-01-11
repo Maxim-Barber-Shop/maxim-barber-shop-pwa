@@ -1,0 +1,133 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  BARBER
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model User {
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String
+  phone       String
+  role        UserRole
+
+  appointments       Appointment[] @relation("CustomerAppointments")
+  barberAppointments Appointment[] @relation("BarberAppointments")
+  barberServices     BarberService[]
+  barberWeeklyHours  BarberWeeklyHour[]
+  barberTimeOff      BarberTimeOff[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Service {
+  id              String   @id @default(uuid())
+  name            String
+  durationMinutes Int
+  price           Float
+
+  barbers      BarberService[]
+  appointments Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BarberService {
+  barberId  String
+  serviceId String
+
+  barber  User    @relation(fields: [barberId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@id([barberId, serviceId])
+}
+
+model Store {
+  id      String @id @default(uuid())
+  name    String
+  address String
+
+  hours        StoreHour[]
+  appointments Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StoreHour {
+  id        String   @id @default(uuid())
+  storeId  String
+  dayOfWeek Int      // 0 = Sunday, 6 = Saturday
+  openTime  DateTime
+  closeTime DateTime
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, dayOfWeek])
+}
+
+model BarberWeeklyHour {
+  id        String   @id @default(uuid())
+  barberId  String
+  dayOfWeek Int      // 0 = Sunday, 6 = Saturday
+  startTime DateTime
+  endTime   DateTime
+
+  barber User @relation(fields: [barberId], references: [id])
+
+  @@unique([barberId, dayOfWeek])
+}
+
+model BarberTimeOff {
+  id        String   @id @default(uuid())
+  barberId  String
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+
+  barber User @relation(fields: [barberId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Appointment {
+  id        String             @id @default(uuid())
+  customerId String
+  barberId   String
+  serviceId  String
+  storeId    String
+  status     AppointmentStatus
+
+  startTime DateTime
+  endTime   DateTime
+
+  customer User    @relation("CustomerAppointments", fields: [customerId], references: [id])
+  barber   User    @relation("BarberAppointments", fields: [barberId], references: [id])
+  service  Service @relation(fields: [serviceId], references: [id])
+  store    Store   @relation(fields: [storeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,29 @@
+meta {
+  name: Update User
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/users/:id
+  body: json
+  auth: none
+}
+
+params:path {
+  id: USER_ID_HERE
+}
+
+body:json {
+  {
+    "name": "Updated Name",
+    "email": "updated@example.com"
+  }
+}
+
+docs {
+  Update an existing user.
+
+  Replace USER_ID_HERE with actual user ID.
+  You can update any combination of fields.
+}

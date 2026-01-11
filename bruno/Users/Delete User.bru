@@ -1,0 +1,22 @@
+meta {
+  name: Delete User
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/users/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: USER_ID_HERE
+}
+
+docs {
+  Delete a user by ID.
+
+  Replace USER_ID_HERE with actual user ID.
+  ⚠️ This action is irreversible!
+}

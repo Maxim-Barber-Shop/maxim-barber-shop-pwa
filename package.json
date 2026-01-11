@@ -1,0 +1,48 @@
+{
+  "name": "maxim-barber-shop-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "prepare": "husky",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.1",
+    "@supabase/supabase-js": "^2.90.1",
+    "next": "16.1.1",
+    "postcss": "^8.5.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@netlify/plugin-nextjs": "^5.15.4",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@tanstack/eslint-plugin-query": "^5.91.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^17.0.0",
+    "husky": "^9.1.7",
+    "prisma": "^6.19.1",
+    "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "typescript-eslint": "^8.52.0"
+  }
+}

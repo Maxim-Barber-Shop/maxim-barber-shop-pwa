@@ -1,0 +1,29 @@
+meta {
+  name: Update Appointment
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/appointments/:id
+  body: json
+  auth: none
+}
+
+params:path {
+  id: APPOINTMENT_ID_HERE
+}
+
+body:json {
+  {
+    "status": "confirmed",
+    "dateTime": "2026-01-15T14:00:00Z"
+  }
+}
+
+docs {
+  Update an existing appointment.
+
+  Replace APPOINTMENT_ID_HERE with actual appointment ID.
+  You can update any combination of fields.
+}
