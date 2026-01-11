@@ -17,17 +17,19 @@ export const metadata: Metadata = {
   title: 'Maxim Barber Shop - Prenota Online',
   description: 'Prenota il tuo appuntamento presso Maxim Barber Shop. Servizi premium di taglio e barba.',
   manifest: '/manifest.json',
-  themeColor: '#4169e1',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'Maxim',
   },
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#4169e1',
 };
 
 export default function RootLayout({
