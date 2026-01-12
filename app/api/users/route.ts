@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { userService } from '@/lib/api';
+import { withRole, AuthenticatedRequest } from '@/lib/auth/middleware';
 
 // GET /api/users - Get all users
-export async function GET(request: NextRequest) {
+export const GET = withRole(['ADMIN', 'BARBER'], async (request: AuthenticatedRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
     const role = searchParams.get('role');
@@ -45,19 +46,22 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
 // POST /api/users - Create a new user
-export async function POST(request: NextRequest) {
+export const POST = withRole(['ADMIN'], async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
-    const { firstName, lastName, phone, role } = body;
+    const { firstName, lastName, phone, password, role } = body;
 
-    if (!firstName || !lastName || !phone || !role) {
-      return NextResponse.json({ error: 'firstName, lastName, phone, and role are required' }, { status: 400 });
+    if (!firstName || !lastName || !phone || !password || !role) {
+      return NextResponse.json(
+        { error: 'firstName, lastName, phone, password, and role are required' },
+        { status: 400 },
+      );
     }
 
-    const { data, error } = await userService.create({ firstName, lastName, phone, role });
+    const { data, error } = await userService.create({ firstName, lastName, phone, password, role });
 
     if (error) {
       return NextResponse.json({ error }, { status: 500 });
@@ -67,4 +71,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

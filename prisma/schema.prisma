@@ -17,7 +17,6 @@ enum UserRole {
 }
 
 enum AppointmentStatus {
-  PENDING
   CONFIRMED
   CANCELLED
   COMPLETED
@@ -28,8 +27,9 @@ model User {
   id          String   @id @default(uuid())
   firstName   String
   lastName    String
-  phone       String
-  role        UserRole
+  phone       String   @unique
+  password    String
+  role        UserRole @default(CUSTOMER)
 
   appointments       Appointment[] @relation("CustomerAppointments")
   barberAppointments Appointment[] @relation("BarberAppointments")
@@ -84,8 +84,6 @@ model StoreHour {
   closeTime DateTime
 
   store Store @relation(fields: [storeId], references: [id])
-
-  @@unique([storeId, dayOfWeek])
 }
 
 model BarberWeeklyHour {
@@ -96,8 +94,6 @@ model BarberWeeklyHour {
   endTime   DateTime
 
   barber User @relation(fields: [barberId], references: [id])
-
-  @@unique([barberId, dayOfWeek])
 }
 
 model BarberTimeOff {
@@ -123,10 +119,10 @@ model Appointment {
   startTime DateTime
   endTime   DateTime
 
-  customer User    @relation("CustomerAppointments", fields: [customerId], references: [id])
-  barber   User    @relation("BarberAppointments", fields: [barberId], references: [id])
-  service  Service @relation(fields: [serviceId], references: [id])
-  store    Store   @relation(fields: [storeId], references: [id])
+  customer User     @relation("CustomerAppointments", fields: [customerId], references: [id])
+  barber   User     @relation("BarberAppointments", fields: [barberId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
+  store    Store    @relation(fields: [storeId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

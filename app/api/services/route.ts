@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { serviceService } from '@/lib/api';
+import { withAuth, withRole, AuthenticatedRequest } from '@/lib/auth/middleware';
 
 // GET /api/services - Get all services
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
     const barberId = searchParams.get('barberId');
@@ -56,10 +57,10 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
 // POST /api/services - Create a new service
-export async function POST(request: NextRequest) {
+export const POST = withRole(['ADMIN', 'BARBER'], async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
     const { name, durationMinutes, price } = body;
@@ -82,4 +83,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

@@ -1,11 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { appointmentService } from '@/lib/api';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
+import type { Appointment, User, Service, Store } from '@prisma/client';
+
+type AppointmentWithRelations = Appointment & {
+  barber: User;
+  service: Service;
+  store: Store;
+};
 
 // GET /api/appointments - Get all appointments
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const customerId = searchParams.get('customerId');
+    let customerId = searchParams.get('customerId');
     const barberId = searchParams.get('barberId');
     const storeId = searchParams.get('storeId');
     const status = searchParams.get('status');
@@ -13,13 +21,25 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
+    // If user is CUSTOMER, force customerId to be their own userId
+    if (request.user?.role === 'CUSTOMER') {
+      customerId = request.user.userId;
+    }
+
     // Filter by customerId
     if (customerId) {
       const { data, error } = await appointmentService.getByCustomerId(customerId);
       if (error) {
-        return NextResponse.json({ error }, { status: 500 });
+        return NextResponse.json({ data: null, error }, { status: 500 });
       }
-      return NextResponse.json({ data });
+      // Remove sensitive data
+      const cleanedData = (data as AppointmentWithRelations[])?.map((appointment) => {
+        const { barber, ...rest } = appointment;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password, ...barberWithoutPassword } = barber;
+        return { ...rest, barber: barberWithoutPassword };
+      });
+      return NextResponse.json({ data: cleanedData, error: null });
     }
 
     // Filter by barberId
@@ -43,7 +63,7 @@ export async function GET(request: NextRequest) {
     // Filter by status
     if (status) {
       const { data, error } = await appointmentService.getByStatus(
-        status as 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW',
+        status as 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW',
       );
       if (error) {
         return NextResponse.json({ error }, { status: 500 });
@@ -92,13 +112,19 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
 // POST /api/appointments - Create a new appointment
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
-    const { customerId, barberId, serviceId, storeId, startTime, endTime, status } = body;
+    // eslint-disable-next-line prefer-const
+    let { customerId, barberId, serviceId, storeId, startTime, endTime, status } = body;
+
+    // If user is CUSTOMER, force customerId to be their own userId
+    if (request.user?.role === 'CUSTOMER') {
+      customerId = request.user.userId;
+    }
 
     if (!customerId || !barberId || !serviceId || !storeId || !startTime || !endTime) {
       return NextResponse.json(
@@ -114,7 +140,7 @@ export async function POST(request: NextRequest) {
       storeId,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
-      status: status || 'PENDING',
+      status: status || 'CONFIRMED',
     });
 
     if (error) {
@@ -125,4 +151,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

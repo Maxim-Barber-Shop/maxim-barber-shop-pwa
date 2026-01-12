@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { storeService } from '@/lib/api';
+import { withAuth, withRole, AuthenticatedRequest } from '@/lib/auth/middleware';
 
 // GET /api/stores - Get all stores
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
     const city = searchParams.get('city');
@@ -45,10 +46,10 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
 // POST /api/stores - Create a new store
-export async function POST(request: NextRequest) {
+export const POST = withRole(['ADMIN'], async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
     const { name, address } = body;
@@ -67,4 +68,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
