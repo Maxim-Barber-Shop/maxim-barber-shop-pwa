@@ -31,7 +31,13 @@ export function withAuth(handler: (req: AuthenticatedRequest) => Promise<Respons
 
 export function withRole(allowedRoles: UserRole[], handler: (req: AuthenticatedRequest) => Promise<Response>) {
   return withAuth(async (req: AuthenticatedRequest) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    // Allow ADMIN to access BARBER routes
+    const isAuthorized =
+      req.user &&
+      (allowedRoles.includes(req.user.role) ||
+        (allowedRoles.includes('BARBER' as UserRole) && req.user.role === 'ADMIN'));
+
+    if (!isAuthorized) {
       return NextResponse.json({ data: null, error: 'Accesso negato' }, { status: 403 });
     }
 

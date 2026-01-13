@@ -59,20 +59,25 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
   }
 });
 
-// POST /api/services - Create a new service
-export const POST = withRole(['ADMIN', 'BARBER'], async (request: AuthenticatedRequest) => {
+// POST /api/services - Create a new service (ADMIN only)
+export const POST = withRole(['ADMIN'], async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
-    const { name, durationMinutes, price } = body;
+    const { name, durationMinutes, price, barberId, storeId } = body;
 
-    if (!name || !durationMinutes || price === undefined) {
-      return NextResponse.json({ error: 'name, durationMinutes, and price are required' }, { status: 400 });
+    if (!name || !durationMinutes || price === undefined || !barberId || !storeId) {
+      return NextResponse.json(
+        { error: 'name, durationMinutes, price, barberId, and storeId are required' },
+        { status: 400 },
+      );
     }
 
     const { data, error } = await serviceService.create({
       name,
       durationMinutes: parseInt(durationMinutes),
       price: parseFloat(price),
+      barberId,
+      storeId,
     });
 
     if (error) {

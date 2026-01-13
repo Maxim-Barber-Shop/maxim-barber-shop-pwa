@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 type AuthMode = 'login' | 'register';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const router = useRouter();
+  const { user, isLoading: isAuthLoading, login } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [phonePrefix, setPhonePrefix] = useState('+39');
   const [phone, setPhone] = useState('');
@@ -20,6 +23,19 @@ export default function LoginPage() {
   const [lastName, setLastName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!isAuthLoading && user) {
+      if (user.role === 'CUSTOMER') {
+        router.push('/customer/dashboard');
+      } else if (user.role === 'BARBER') {
+        router.push('/barber/dashboard');
+      } else if (user.role === 'ADMIN') {
+        router.push('/admin/dashboard');
+      }
+    }
+  }, [user, isAuthLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +76,20 @@ export default function LoginPage() {
     setError('');
   };
 
+  // Show loading while checking auth status
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // Don't show login page if already logged in (will redirect)
+  if (user) {
+    return null;
+  }
+
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 py-6">
       {/* Background pattern */}
@@ -69,10 +99,15 @@ export default function LoginPage() {
 
       {/* Logo/Brand Area - Compact */}
       <div className="mb-6 text-center">
-        <h1 className="mb-1 bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-4xl font-bold tracking-tight text-transparent">
-          MAXIM
-        </h1>
-        <p className="text-xs font-light uppercase tracking-[0.3em] text-muted-foreground">Barber Shop</p>
+        <Image
+          src="/logo_maxim.png"
+          alt="Maxim Barber Studio"
+          width={500}
+          height={131}
+          priority
+          unoptimized
+          className="mx-auto"
+        />
       </div>
 
       {/* Login/Register Card */}

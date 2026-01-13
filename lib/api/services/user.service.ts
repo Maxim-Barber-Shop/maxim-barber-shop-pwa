@@ -12,7 +12,7 @@ class UserService extends BaseService<User> {
   async getByPhone(phone: string): Promise<ApiResponse<User>> {
     try {
       const user = await prisma.user.findFirst({
-        where: { phone },
+        where: { phone, deletedAt: null },
       });
 
       if (!user) {
@@ -29,6 +29,7 @@ class UserService extends BaseService<User> {
     try {
       const users = await prisma.user.findMany({
         where: {
+          deletedAt: null,
           OR: [
             { firstName: { contains: searchTerm, mode: 'insensitive' } },
             { lastName: { contains: searchTerm, mode: 'insensitive' } },
@@ -45,7 +46,7 @@ class UserService extends BaseService<User> {
   async getByRole(role: UserRole): Promise<ApiResponse<User[]>> {
     try {
       const users = await prisma.user.findMany({
-        where: { role },
+        where: { role, deletedAt: null },
         orderBy: { firstName: 'asc' },
       });
 
@@ -55,8 +56,33 @@ class UserService extends BaseService<User> {
     }
   }
 
-  async getBarbers(): Promise<ApiResponse<User[]>> {
-    return this.getByRole('BARBER');
+  async getBarbers(storeId?: string): Promise<ApiResponse<User[]>> {
+    try {
+      const where: {
+        role?: { in: UserRole[] };
+        deletedAt: null;
+        barberWeeklyHours?: { some: { storeId: string } };
+      } = {
+        role: { in: ['BARBER', 'ADMIN'] }, // Include both BARBER and ADMIN
+        deletedAt: null,
+      };
+
+      // If storeId is provided, filter barbers who have hours at this store
+      if (storeId) {
+        where.barberWeeklyHours = {
+          some: { storeId },
+        };
+      }
+
+      const barbers = await prisma.user.findMany({
+        where,
+        orderBy: { firstName: 'asc' },
+      });
+
+      return { data: barbers, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   async getCustomers(): Promise<ApiResponse<User[]>> {
@@ -64,7 +90,7 @@ class UserService extends BaseService<User> {
   }
 
   // Override create to hash password before saving
-  async create(item: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<User>> {
+  async create(item: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<ApiResponse<User>> {
     try {
       // Hash the password before saving
       const hashedPassword = await bcrypt.hash(item.password, 10);

@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { BaseService } from '../base-service';
-import { ApiResponse } from '../types';
+import { ApiResponse, PaginationParams, SortParams } from '../types';
 import type { Service } from '@prisma/client';
 
 class ServiceService extends BaseService<Service> {
@@ -8,12 +8,57 @@ class ServiceService extends BaseService<Service> {
     super(prisma.service);
   }
 
+  async getAll(pagination?: PaginationParams, sort?: SortParams): Promise<ApiResponse<Service[]>> {
+    try {
+      const orderBy = sort ? { [sort.column]: sort.ascending ? 'asc' : 'desc' } : undefined;
+
+      const skip = pagination ? (pagination.page! - 1) * pagination.pageSize! : undefined;
+      const take = pagination?.pageSize;
+
+      const data = await prisma.service.findMany({
+        where: { deletedAt: null },
+        include: {
+          barber: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+          store: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        ...(orderBy && { orderBy }),
+        ...(skip !== undefined && { skip }),
+        ...(take && { take }),
+      });
+
+      return { data: data as Service[], error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   async getByBarber(barberId: string): Promise<ApiResponse<Service[]>> {
     try {
       const services = await prisma.service.findMany({
         where: {
-          barbers: {
-            some: { barberId },
+          deletedAt: null,
+          barberId,
+        },
+        include: {
+          barber: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+          store: {
+            select: {
+              name: true,
+            },
           },
         },
         orderBy: { name: 'asc' },
@@ -29,6 +74,7 @@ class ServiceService extends BaseService<Service> {
     try {
       const services = await prisma.service.findMany({
         where: {
+          deletedAt: null,
           price: {
             gte: minPrice,
             lte: maxPrice,
@@ -47,6 +93,7 @@ class ServiceService extends BaseService<Service> {
     try {
       const services = await prisma.service.findMany({
         where: {
+          deletedAt: null,
           durationMinutes: {
             lte: maxDuration,
           },

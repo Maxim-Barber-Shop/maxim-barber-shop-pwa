@@ -19,12 +19,19 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     if (!isLoading && !user) {
       // Not logged in, redirect to login
       router.push('/');
-    } else if (!isLoading && user && !allowedRoles.includes(user.role)) {
-      // Logged in but wrong role, redirect to correct dashboard
-      if (user.role === 'CUSTOMER') {
-        router.push('/customer/dashboard');
-      } else if (user.role === 'BARBER' || user.role === 'ADMIN') {
-        router.push('/barber/dashboard');
+    } else if (!isLoading && user) {
+      // Allow ADMIN to access BARBER routes
+      const hasAccess = allowedRoles.includes(user.role) || (allowedRoles.includes('BARBER') && user.role === 'ADMIN');
+
+      if (!hasAccess) {
+        // Logged in but wrong role, redirect to correct dashboard
+        if (user.role === 'CUSTOMER') {
+          router.push('/customer/dashboard');
+        } else if (user.role === 'BARBER') {
+          router.push('/barber/dashboard');
+        } else if (user.role === 'ADMIN') {
+          router.push('/admin/dashboard');
+        }
       }
     }
   }, [user, isLoading, allowedRoles, router]);
@@ -39,7 +46,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   // User not logged in or wrong role
-  if (!user || !allowedRoles.includes(user.role)) {
+  // Allow ADMIN to access BARBER routes
+  const hasAccess =
+    user && (allowedRoles.includes(user.role) || (allowedRoles.includes('BARBER') && user.role === 'ADMIN'));
+
+  if (!hasAccess) {
     return null;
   }
 

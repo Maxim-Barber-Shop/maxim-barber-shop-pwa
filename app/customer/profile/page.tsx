@@ -148,7 +148,7 @@ function CustomerProfileContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[calc(100vh-153px)] bg-background">
       {/* Main Content */}
       <main className="container mx-auto px-4 py-4">
         <div className="mb-8">
@@ -252,16 +252,6 @@ function CustomerProfileContent() {
                 </>
               )}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Preferenze</CardTitle>
-            <CardDescription>Impostazioni dell'account</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">Le preferenze saranno disponibili a breve.</p>
           </CardContent>
         </Card>
       </main>

@@ -8,7 +8,7 @@ import { Users } from 'lucide-react';
 
 function BarberClientsContent() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[calc(100vh-153px)] bg-background">
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6">

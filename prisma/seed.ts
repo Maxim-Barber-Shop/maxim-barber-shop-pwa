@@ -11,10 +11,9 @@ async function main() {
   await prisma.appointment.deleteMany();
   await prisma.barberTimeOff.deleteMany();
   await prisma.barberWeeklyHour.deleteMany();
-  await prisma.barberService.deleteMany();
   await prisma.storeHour.deleteMany();
-  await prisma.user.deleteMany();
   await prisma.service.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.store.deleteMany();
 
   console.log('✅ Cleared existing data');
@@ -68,41 +67,7 @@ async function main() {
   await prisma.storeHour.createMany({ data: storeHours });
   console.log('✅ Created store hours');
 
-  // Create Services
-  console.log('✂️ Creating services...');
-  const taglioClassico = await prisma.service.create({
-    data: {
-      name: 'Taglio Classico',
-      durationMinutes: 30,
-      price: 20,
-    },
-  });
-
-  const barba = await prisma.service.create({
-    data: {
-      name: 'Barba',
-      durationMinutes: 20,
-      price: 15,
-    },
-  });
-
-  const taglioBarba = await prisma.service.create({
-    data: {
-      name: 'Taglio + Barba',
-      durationMinutes: 45,
-      price: 30,
-    },
-  });
-
-  const taglioModerno = await prisma.service.create({
-    data: {
-      name: 'Taglio Moderno',
-      durationMinutes: 40,
-      price: 25,
-    },
-  });
-
-  console.log('✅ Created 4 services');
+  // Services will be created after barbers
 
   // Create Users
   console.log('👤 Creating users...');
@@ -183,56 +148,62 @@ async function main() {
 
   console.log('✅ Created 7 users (1 admin, 3 barbers, 3 customers)');
 
-  // Create Barber Services (which services each barber can perform)
-  console.log('🔗 Creating barber-service relationships...');
-  await prisma.barberService.createMany({
+  // Create Services (specific to each barber and store)
+  console.log('✂️ Creating services...');
+  await prisma.service.createMany({
     data: [
-      // Maxim can do all services
-      { barberId: maxim.id, serviceId: taglioClassico.id },
-      { barberId: maxim.id, serviceId: barba.id },
-      { barberId: maxim.id, serviceId: taglioBarba.id },
-      { barberId: maxim.id, serviceId: taglioModerno.id },
-      // Luca can do all services
-      { barberId: luca.id, serviceId: taglioClassico.id },
-      { barberId: luca.id, serviceId: barba.id },
-      { barberId: luca.id, serviceId: taglioBarba.id },
-      { barberId: luca.id, serviceId: taglioModerno.id },
-      // Marco specializes in cuts
-      { barberId: marco.id, serviceId: taglioClassico.id },
-      { barberId: marco.id, serviceId: taglioModerno.id },
-      { barberId: marco.id, serviceId: taglioBarba.id },
+      // Maxim's services at Pescara
+      { name: 'Taglio Classico', durationMinutes: 30, price: 20, barberId: maxim.id, storeId: pescara.id },
+      { name: 'Barba', durationMinutes: 20, price: 15, barberId: maxim.id, storeId: pescara.id },
+      { name: 'Taglio + Barba', durationMinutes: 45, price: 32, barberId: maxim.id, storeId: pescara.id },
+      { name: 'Taglio Moderno', durationMinutes: 40, price: 25, barberId: maxim.id, storeId: pescara.id },
+
+      // Luca's services at Ortona
+      { name: 'Taglio Classico', durationMinutes: 30, price: 18, barberId: luca.id, storeId: ortona.id },
+      { name: 'Barba', durationMinutes: 20, price: 15, barberId: luca.id, storeId: ortona.id },
+      { name: 'Taglio + Barba', durationMinutes: 45, price: 30, barberId: luca.id, storeId: ortona.id },
+      { name: 'Taglio Moderno', durationMinutes: 40, price: 28, barberId: luca.id, storeId: ortona.id },
+
+      // Marco's services at Pescara (specialized in cuts)
+      { name: 'Taglio Classico', durationMinutes: 30, price: 22, barberId: marco.id, storeId: pescara.id },
+      { name: 'Taglio Moderno', durationMinutes: 40, price: 25, barberId: marco.id, storeId: pescara.id },
+      { name: 'Taglio + Barba', durationMinutes: 45, price: 30, barberId: marco.id, storeId: pescara.id },
     ],
   });
 
-  console.log('✅ Linked services to barbers');
+  console.log('✅ Created 11 services (specific to barber and store)');
 
   // Create Barber Weekly Hours
   console.log('⏰ Creating barber weekly hours...');
   const barberWeeklyHours = [
-    // Maxim works Monday to Friday 9:00-19:00
+    // Maxim works at Pescara - Monday to Friday 9:00-19:00
     ...[1, 2, 3, 4, 5].map((day) => ({
       barberId: maxim.id,
+      storeId: pescara.id,
       dayOfWeek: day,
       startTime: new Date('2024-01-01T09:00:00Z'),
       endTime: new Date('2024-01-01T19:00:00Z'),
     })),
-    // Maxim works Saturday 9:00-18:00
+    // Maxim works at Pescara - Saturday 9:00-18:00
     {
       barberId: maxim.id,
+      storeId: pescara.id,
       dayOfWeek: 6,
       startTime: new Date('2024-01-01T09:00:00Z'),
       endTime: new Date('2024-01-01T18:00:00Z'),
     },
-    // Luca works Tuesday to Saturday 9:00-19:00
+    // Luca works at Ortona - Tuesday to Saturday 9:00-19:00
     ...[2, 3, 4, 5, 6].map((day) => ({
       barberId: luca.id,
+      storeId: ortona.id,
       dayOfWeek: day,
       startTime: new Date('2024-01-01T09:00:00Z'),
       endTime: new Date('2024-01-01T19:00:00Z'),
     })),
-    // Marco works Monday, Wednesday, Friday 14:00-19:00
+    // Marco works at Pescara - Monday, Wednesday, Friday 14:00-19:00
     ...[1, 3, 5].map((day) => ({
       barberId: marco.id,
+      storeId: pescara.id,
       dayOfWeek: day,
       startTime: new Date('2024-01-01T14:00:00Z'),
       endTime: new Date('2024-01-01T19:00:00Z'),
@@ -241,6 +212,15 @@ async function main() {
 
   await prisma.barberWeeklyHour.createMany({ data: barberWeeklyHours });
   console.log('✅ Created barber weekly hours');
+
+  // Get services for appointments
+  const maximTaglioClassico = await prisma.service.findFirst({
+    where: { name: 'Taglio Classico', barberId: maxim.id, storeId: pescara.id },
+  });
+
+  const lucaTaglioBarba = await prisma.service.findFirst({
+    where: { name: 'Taglio + Barba', barberId: luca.id, storeId: ortona.id },
+  });
 
   // Create sample appointments
   console.log('📅 Creating sample appointments...');
@@ -252,43 +232,67 @@ async function main() {
   const appointment1End = new Date(tomorrow);
   appointment1End.setMinutes(appointment1End.getMinutes() + 30);
 
-  await prisma.appointment.create({
-    data: {
-      customerId: davide.id,
-      barberId: maxim.id,
-      serviceId: taglioClassico.id,
-      storeId: pescara.id,
-      startTime: appointment1Start,
-      endTime: appointment1End,
-      status: AppointmentStatus.CONFIRMED,
-    },
-  });
+  if (maximTaglioClassico) {
+    await prisma.appointment.create({
+      data: {
+        customerId: davide.id,
+        barberId: maxim.id,
+        serviceId: maximTaglioClassico.id,
+        storeId: pescara.id,
+        startTime: appointment1Start,
+        endTime: appointment1End,
+        status: AppointmentStatus.CONFIRMED,
+      },
+    });
+  }
 
   const appointment2Start = new Date(tomorrow);
   appointment2Start.setHours(15, 0, 0, 0);
   const appointment2End = new Date(appointment2Start);
   appointment2End.setMinutes(appointment2End.getMinutes() + 45);
 
-  await prisma.appointment.create({
-    data: {
-      customerId: giovanni.id,
-      barberId: luca.id,
-      serviceId: taglioBarba.id,
-      storeId: ortona.id,
-      startTime: appointment2Start,
-      endTime: appointment2End,
-      status: AppointmentStatus.CONFIRMED,
-    },
-  });
+  if (lucaTaglioBarba) {
+    await prisma.appointment.create({
+      data: {
+        customerId: giovanni.id,
+        barberId: luca.id,
+        serviceId: lucaTaglioBarba.id,
+        storeId: ortona.id,
+        startTime: appointment2Start,
+        endTime: appointment2End,
+        status: AppointmentStatus.CONFIRMED,
+      },
+    });
+  }
 
   console.log('✅ Created 2 sample appointments');
+
+  // Create Settings
+  console.log('⚙️ Creating default settings...');
+  await prisma.settings.deleteMany(); // Clear existing settings
+  await prisma.settings.createMany({
+    data: [
+      {
+        key: 'booking_limit_per_week',
+        value: '1',
+        description: 'Numero massimo di appuntamenti prenotabili a settimana per cliente',
+      },
+      {
+        key: 'booking_limit_per_month',
+        value: '2',
+        description: 'Numero massimo di appuntamenti prenotabili al mese per cliente',
+      },
+    ],
+  });
+  console.log('✅ Created default settings');
 
   console.log('\n🎉 Database seeded successfully!');
   console.log('\n📋 Summary:');
   console.log('   Stores: 2 (Pescara, Ortona)');
-  console.log('   Services: 4');
+  console.log('   Services: 11 (specific to each barber and store)');
   console.log('   Users: 7 (1 admin, 3 barbers, 3 customers)');
   console.log('   Appointments: 2');
+  console.log('   Settings: 2 (booking limits)');
   console.log('\n🔑 Login credentials (all users):');
   console.log('   Password: password123');
   console.log('\n   Admin: +393331111111');

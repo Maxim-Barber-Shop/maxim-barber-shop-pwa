@@ -1,16 +1,13 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Urbanist } from 'next/font/google';
 import { AuthProvider } from '@/contexts/auth-context';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const urbanist = Urbanist({
+  variable: '--font-urbanist',
   subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
+  display: 'swap',
+  weight: ['300', '400', '500', '600', '700', '800'],
 });
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -23,13 +20,17 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Maxim',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: '#4169e1',
 };
 
@@ -40,11 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it">
-      <head>
-        <link rel="icon" href="/icon-192x192.png" />
-        <meta name="mobile-web-app-capable" content="yes" />
-      </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${urbanist.variable} font-sans antialiased`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

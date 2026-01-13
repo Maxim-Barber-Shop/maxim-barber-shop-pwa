@@ -10,8 +10,8 @@ class StoreService extends BaseService<Store> {
 
   async getWithHours(storeId: string): Promise<ApiResponse<Store & { hours: unknown[] }>> {
     try {
-      const store = await prisma.store.findUnique({
-        where: { id: storeId },
+      const store = await prisma.store.findFirst({
+        where: { id: storeId, deletedAt: null },
         include: {
           hours: {
             orderBy: { dayOfWeek: 'asc' },
@@ -32,6 +32,7 @@ class StoreService extends BaseService<Store> {
   async getAllWithHours(): Promise<ApiResponse<Array<Store & { hours: unknown[] }>>> {
     try {
       const stores = await prisma.store.findMany({
+        where: { deletedAt: null },
         include: {
           hours: {
             orderBy: { dayOfWeek: 'asc' },
@@ -50,6 +51,7 @@ class StoreService extends BaseService<Store> {
     try {
       const stores = await prisma.store.findMany({
         where: {
+          deletedAt: null,
           address: {
             contains: city,
             mode: 'insensitive',
