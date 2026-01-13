@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { appointmentService } from '@/lib/api';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
+import { prisma } from '@/lib/prisma';
 import type { Appointment, User, Service, Store } from '@prisma/client';
 
 type AppointmentWithRelations = Appointment & {
@@ -131,6 +132,71 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
         { error: 'customerId, barberId, serviceId, storeId, startTime, and endTime are required' },
         { status: 400 },
       );
+    }
+
+    // CHECK BOOKING LIMITS (only for CUSTOMER role)
+    if (request.user?.role === 'CUSTOMER') {
+      const appointmentDate = new Date(startTime);
+
+      // Get booking limits from settings
+      const weeklyLimitSetting = await prisma.settings.findUnique({
+        where: { key: 'booking_limit_per_week' },
+      });
+      const monthlyLimitSetting = await prisma.settings.findUnique({
+        where: { key: 'booking_limit_per_month' },
+      });
+
+      const weeklyLimit = weeklyLimitSetting ? parseInt(weeklyLimitSetting.value) : 1;
+      const monthlyLimit = monthlyLimitSetting ? parseInt(monthlyLimitSetting.value) : 2;
+
+      // Get customer's existing appointments
+      const { data: existingAppointments } = await appointmentService.getByCustomerId(customerId);
+
+      if (existingAppointments) {
+        const confirmedAppointments = existingAppointments.filter(
+          (apt) => apt.status === 'CONFIRMED' || apt.status === 'COMPLETED',
+        );
+
+        // Check weekly limit
+        const weekStart = new Date(appointmentDate);
+        weekStart.setDate(appointmentDate.getDate() - appointmentDate.getDay()); // Start of week (Sunday)
+        weekStart.setHours(0, 0, 0, 0);
+
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 7);
+
+        const appointmentsThisWeek = confirmedAppointments.filter((apt) => {
+          const aptDate = new Date(apt.startTime);
+          return aptDate >= weekStart && aptDate < weekEnd;
+        });
+
+        if (appointmentsThisWeek.length >= weeklyLimit) {
+          return NextResponse.json(
+            {
+              error: `Hai già ${weeklyLimit} appuntament${weeklyLimit > 1 ? 'i' : 'o'} questa settimana. Puoi re massimo ${weeklyLimit} appuntament${weeklyLimit > 1 ? 'i' : 'o'} a settimana.`,
+            },
+            { status: 400 },
+          );
+        }
+
+        // Check monthly limit
+        const monthStart = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), 1);
+        const monthEnd = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth() + 1, 0, 23, 59, 59);
+
+        const appointmentsThisMonth = confirmedAppointments.filter((apt) => {
+          const aptDate = new Date(apt.startTime);
+          return aptDate >= monthStart && aptDate <= monthEnd;
+        });
+
+        if (appointmentsThisMonth.length >= monthlyLimit) {
+          return NextResponse.json(
+            {
+              error: `Hai già ${monthlyLimit} appuntament${monthlyLimit > 1 ? 'i' : 'o'} questo mese. Puoi prenotare massimo ${monthlyLimit} appuntament${monthlyLimit > 1 ? 'i' : 'o'} al mese.`,
+            },
+            { status: 400 },
+          );
+        }
+      }
     }
 
     const { data, error } = await appointmentService.create({

@@ -7,46 +7,18 @@ import { ProtectedRoute } from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { ChevronLeft, ChevronRight, Check, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, User, AlertCircle } from 'lucide-react';
+import {
+  generateDates,
+  formatDateItalian,
+  getAvailableTimeSlots,
+  isSlotUnavailable,
+  type AvailabilitySlot,
+} from '@/lib/utils/date-time';
+import type { Store, Service, Barber, BookingLimits, ServiceCategory } from '@/lib/types/appointment';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type Step = 1 | 2 | 3 | 4;
-
-interface Store {
-  id: string;
-  name: string;
-  address: string;
-}
-
-interface Service {
-  id: string;
-  name: string;
-  durationMinutes: number;
-  price: number;
-}
-
-interface Barber {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
-
-interface AvailabilitySlot {
-  date: string;
-  time: string;
-  available: boolean;
-}
-
-// Generate next 14 days
-const generateDates = () => {
-  const dates = [];
-  const today = new Date();
-  for (let i = 0; i < 14; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    dates.push(date);
-  }
-  return dates;
-};
 
 function NewAppointmentContent() {
   const router = useRouter();
@@ -55,6 +27,7 @@ function NewAppointmentContent() {
   const [selectedStore, setSelectedStore] = useState<string>('');
   const [selectedService, setSelectedService] = useState<string>('');
   const [selectedBarber, setSelectedBarber] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory>('COMBO');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,8 +38,34 @@ function NewAppointmentContent() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
+  const [isLoadingBarbers, setIsLoadingBarbers] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [bookingLimits, setBookingLimits] = useState<BookingLimits | null>(null);
+  const [isLoadingLimits, setIsLoadingLimits] = useState(true);
 
   const dates = generateDates();
+
+  // Load booking limits
+  useEffect(() => {
+    const loadLimits = async () => {
+      setIsLoadingLimits(true);
+      try {
+        const token = getToken();
+        const response = await fetch('/api/appointments/check-limits', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json();
+        if (result.data) {
+          setBookingLimits(result.data);
+        }
+      } catch (err) {
+        console.error('Error loading booking limits:', err);
+      } finally {
+        setIsLoadingLimits(false);
+      }
+    };
+    loadLimits();
+  }, [getToken]);
 
   // Load stores
   useEffect(() => {
@@ -87,43 +86,75 @@ function NewAppointmentContent() {
     loadStores();
   }, [getToken]);
 
-  // Load services
+  // Load services when barber is selected
   useEffect(() => {
+    if (!selectedBarber || !selectedStore) {
+      setServices([]);
+      setIsLoadingServices(false);
+      return;
+    }
+
+    // Reset service selection when barber changes
+    setSelectedService('');
+    setSelectedDate(null);
+    setSelectedTime('');
+
     const loadServices = async () => {
+      setIsLoadingServices(true);
       try {
         const token = getToken();
-        const response = await fetch('/api/services', {
+        const response = await fetch(`/api/services?barberId=${selectedBarber}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const result = await response.json();
-        if (result.data) {
-          setServices(result.data);
-        }
+        // Filter services by storeId since each service is now specific to a store
+        const filteredServices = (result.data || []).filter((service: Service) => service.storeId === selectedStore);
+        setServices(filteredServices);
       } catch (err) {
         console.error('Error loading services:', err);
+        setServices([]);
+      } finally {
+        setIsLoadingServices(false);
       }
     };
     loadServices();
-  }, [getToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBarber, selectedStore]);
 
-  // Load barbers
+  // Load barbers when store is selected
   useEffect(() => {
+    if (!selectedStore) {
+      setBarbers([]);
+      setIsLoadingBarbers(false);
+      return;
+    }
+
+    // Reset selections when store changes
+    setSelectedBarber('');
+    setSelectedService('');
+    setSelectedDate(null);
+    setSelectedTime('');
+
     const loadBarbers = async () => {
+      setIsLoadingBarbers(true);
       try {
         const token = getToken();
-        const response = await fetch('/api/barbers', {
+        const response = await fetch(`/api/barbers?storeId=${selectedStore}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const result = await response.json();
-        if (result.data) {
-          setBarbers(result.data);
-        }
+        // Always update barbers state, even if empty
+        setBarbers(result.data || []);
       } catch (err) {
         console.error('Error loading barbers:', err);
+        setBarbers([]);
+      } finally {
+        setIsLoadingBarbers(false);
       }
     };
     loadBarbers();
-  }, [getToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStore]);
 
   // Load availability when store, service, and barber are selected
   useEffect(() => {
@@ -134,7 +165,7 @@ function NewAppointmentContent() {
           const token = getToken();
           const startDate = new Date();
           const endDate = new Date();
-          endDate.setDate(endDate.getDate() + 13);
+          endDate.setDate(endDate.getDate() + 34); // 5 weeks (35 days - 1)
 
           const params = new URLSearchParams({
             storeId: selectedStore,
@@ -166,9 +197,9 @@ function NewAppointmentContent() {
       case 1:
         return selectedStore !== '';
       case 2:
-        return selectedService !== '';
-      case 3:
         return selectedBarber !== '';
+      case 3:
+        return selectedService !== '';
       case 4:
         return selectedDate !== null && selectedTime !== '';
       default:
@@ -255,45 +286,73 @@ function NewAppointmentContent() {
     }
   };
 
-  const isSlotUnavailable = (date: Date, time: string) => {
-    const dateStr = date.toISOString().split('T')[0];
-    const slot = availability.find((s) => s.date === dateStr && s.time === time);
-    return slot ? !slot.available : true;
-  };
-
-  const getAvailableTimeSlots = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return availability
-      .filter((slot) => slot.date === dateStr)
-      .map((slot) => slot.time)
-      .filter((time, index, self) => self.indexOf(time) === index)
-      .sort();
-  };
-
-  const formatDate = (date: Date) => {
-    const days = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
-    const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-    return {
-      day: days[date.getDay()],
-      date: date.getDate(),
-      month: months[date.getMonth()],
-    };
-  };
-
   const getCityFromAddress = (address: string) => {
     // Extract city from address format: "Via Roma 123, 65121 Pescara PE"
     const parts = address.split(',')[1]?.trim().split(' ');
     return parts?.[parts.length - 2] || address;
   };
 
+  const isDateBlockedByLimits = (date: Date): boolean => {
+    if (!bookingLimits) return false;
+
+    // Check weekly limit
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - date.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+
+    const now = new Date();
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay());
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    const isSameWeek = weekStart.getTime() === currentWeekStart.getTime();
+    if (isSameWeek && !bookingLimits.canBookThisWeek) {
+      return true;
+    }
+
+    // Check monthly limit
+    const isSameMonth = date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    if (isSameMonth && !bookingLimits.canBookThisMonth) {
+      return true;
+    }
+
+    return false;
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[calc(100vh-153px)] bg-background">
       {/* Main Content */}
       <main className="container mx-auto px-4 py-4">
         <div className="mb-6">
-          <h1 className="mb-2 text-3xl font-bold">Nuovo Appuntamento</h1>
-          <p className="text-muted-foreground">Prenota il tuo servizio in pochi passaggi</p>
+          <h1 className="mb-3 text-4xl font-bold">Nuovo Appuntamento</h1>
+          <p className="text-lg text-muted-foreground">Prenota il tuo servizio in pochi passaggi</p>
         </div>
+
+        {/* Booking Limits Banner - Show only when limit is reached */}
+        {!isLoadingLimits && bookingLimits && !bookingLimits.canBook && (
+          <div className="mb-6 rounded-lg border border-destructive bg-destructive/10 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-destructive mb-1">Limite di prenotazioni raggiunto</h3>
+                <div className="text-sm text-destructive/90 space-y-1">
+                  {!bookingLimits.canBookThisWeek && (
+                    <p>
+                      Hai già prenotato {bookingLimits.appointmentsThisWeek} su {bookingLimits.weeklyLimit} appuntament
+                      {bookingLimits.weeklyLimit > 1 ? 'i' : 'o'} disponibili questa settimana.
+                    </p>
+                  )}
+                  {!bookingLimits.canBookThisMonth && (
+                    <p>
+                      Hai già prenotato {bookingLimits.appointmentsThisMonth} su {bookingLimits.monthlyLimit}{' '}
+                      appuntament{bookingLimits.monthlyLimit > 1 ? 'i' : 'o'} disponibili questo mese.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Step Indicator */}
         <div className="mb-6 flex justify-center overflow-x-auto">
@@ -313,13 +372,13 @@ function NewAppointmentContent() {
                     {step < currentStep ? <Check className="h-4 w-4 sm:h-5 sm:w-5" /> : step}
                   </div>
                   <span
-                    className={`mt-1 text-[10px] sm:mt-2 sm:text-xs ${
+                    className={`mt-1 text-xs sm:mt-2 sm:text-sm ${
                       step === currentStep ? 'font-semibold text-foreground' : 'text-muted-foreground'
                     }`}
                   >
                     {step === 1 && 'Sede'}
-                    {step === 2 && 'Servizio'}
-                    {step === 3 && 'Barbiere'}
+                    {step === 2 && 'Barbiere'}
+                    {step === 3 && 'Servizio'}
                     {step === 4 && 'Data/Ora'}
                   </span>
                 </div>
@@ -335,14 +394,14 @@ function NewAppointmentContent() {
           <CardHeader>
             <CardTitle>
               {currentStep === 1 && 'Seleziona la Sede'}
-              {currentStep === 2 && 'Seleziona il Servizio'}
-              {currentStep === 3 && 'Seleziona il Barbiere'}
+              {currentStep === 2 && 'Seleziona il Barbiere'}
+              {currentStep === 3 && 'Seleziona il Servizio'}
               {currentStep === 4 && 'Seleziona Data e Orario'}
             </CardTitle>
             <CardDescription>
               {currentStep === 1 && 'Scegli la sede dove vuoi prenotare'}
-              {currentStep === 2 && 'Scegli il servizio che desideri'}
-              {currentStep === 3 && 'Scegli il barbiere che preferisci'}
+              {currentStep === 2 && 'Scegli il barbiere che preferisci'}
+              {currentStep === 3 && 'Scegli il servizio che desideri'}
               {currentStep === 4 && 'Scegli quando vuoi venire'}
             </CardDescription>
           </CardHeader>
@@ -366,7 +425,7 @@ function NewAppointmentContent() {
                           }`}
                         >
                           <div className="flex-1">
-                            <div className="font-semibold">{getCityFromAddress(store.address)}</div>
+                            <div className="font-semibold">{getCityFromAddress(store.name)}</div>
                             <div className="text-sm text-muted-foreground">{store.address}</div>
                           </div>
                           {selectedStore === store.id && (
@@ -381,47 +440,18 @@ function NewAppointmentContent() {
                 </div>
               )}
 
-              {/* Step 2: Service Selection */}
+              {/* Step 2: Barber Selection */}
               {currentStep === 2 && (
                 <div className="space-y-4">
-                  {services.length === 0 ? (
+                  {isLoadingBarbers ? (
                     <div className="py-8 text-center text-muted-foreground">Caricamento...</div>
-                  ) : (
-                    <div className="grid gap-3">
-                      {services.map((service) => (
-                        <button
-                          key={service.id}
-                          onClick={() => setSelectedService(service.id)}
-                          className={`flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-colors w-full ${
-                            selectedService === service.id
-                              ? 'border-primary bg-primary/5'
-                              : 'border-muted hover:border-primary/50'
-                          }`}
-                        >
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <div className="font-semibold">{service.name}</div>
-                            <div className="text-sm text-muted-foreground">{service.durationMinutes} minuti</div>
-                          </div>
-                          <div className="text-lg font-bold whitespace-nowrap shrink-0">
-                            €{service.price.toFixed(2)}
-                          </div>
-                          {selectedService === service.id && (
-                            <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-                              <Check className="h-3 w-3 text-primary-foreground" />
-                            </div>
-                          )}
-                        </button>
-                      ))}
+                  ) : barbers.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-muted-foreground">Nessun barbiere disponibile per questa sede.</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Torna indietro e seleziona un&apos;altra sede.
+                      </p>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Step 3: Barber Selection */}
-              {currentStep === 3 && (
-                <div className="space-y-4">
-                  {barbers.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground">Caricamento...</div>
                   ) : (
                     <div className="grid gap-3">
                       {barbers.map((barber) => (
@@ -437,9 +467,7 @@ function NewAppointmentContent() {
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                             <User className="h-5 w-5 text-muted-foreground" />
                           </div>
-                          <div className="font-semibold flex-1 min-w-0">
-                            {barber.firstName} {barber.lastName}
-                          </div>
+                          <div className="font-semibold flex-1 min-w-0">{barber.firstName}</div>
                           {selectedBarber === barber.id && (
                             <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
                               <Check className="h-3 w-3 text-primary-foreground" />
@@ -448,6 +476,85 @@ function NewAppointmentContent() {
                         </button>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 3: Service Selection */}
+              {currentStep === 3 && (
+                <div className="space-y-4">
+                  {isLoadingServices ? (
+                    <div className="py-8 text-center text-muted-foreground">Caricamento...</div>
+                  ) : services.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-muted-foreground">Nessun servizio disponibile per questo barbiere.</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Torna indietro e seleziona un altro barbiere.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Tabs
+                        value={selectedCategory}
+                        onValueChange={(value) => {
+                          setSelectedCategory(value as ServiceCategory);
+                          setSelectedService('');
+                        }}
+                      >
+                        <TabsList className="grid w-full grid-cols-3">
+                          <TabsTrigger value="COMBO">Combo</TabsTrigger>
+                          <TabsTrigger value="CAPELLI">Capelli</TabsTrigger>
+                          <TabsTrigger value="BARBA">Barba</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                      <div className="grid gap-3">
+                        {services
+                          .filter((s) => s.category === selectedCategory)
+                          .map((service) => (
+                            <button
+                              key={service.id}
+                              onClick={() => setSelectedService(service.id)}
+                              className={`flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-colors w-full ${
+                                selectedService === service.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-muted hover:border-primary/50'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <div className="font-semibold">{service.name}</div>
+                                {service.description && (
+                                  <div className="text-sm text-muted-foreground mt-1">{service.description}</div>
+                                )}
+                                <div className="text-xs text-muted-foreground/70 mt-1">
+                                  {service.durationMinutes} minuti
+                                </div>
+                              </div>
+                              <div className="text-lg font-bold whitespace-nowrap shrink-0">
+                                {service.discountedPrice ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-sm line-through text-muted-foreground">
+                                      €{service.price.toFixed(2)}
+                                    </span>
+                                    <span className="text-green-600">€{service.discountedPrice.toFixed(2)}</span>
+                                  </div>
+                                ) : (
+                                  <span>€{service.price.toFixed(2)}</span>
+                                )}
+                              </div>
+                              {selectedService === service.id && (
+                                <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center shrink-0">
+                                  <Check className="h-3 w-3 text-primary-foreground" />
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        {services.filter((s) => s.category === selectedCategory).length === 0 && (
+                          <div className="py-4 text-center text-muted-foreground">
+                            Nessun servizio in questa categoria
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -463,9 +570,11 @@ function NewAppointmentContent() {
                         <Label>Seleziona la Data</Label>
                         <div className="flex gap-2 overflow-x-auto pb-2">
                           {dates.map((date) => {
-                            const formatted = formatDate(date);
+                            const formatted = formatDateItalian(date);
                             const isSelected = selectedDate?.toDateString() === date.toDateString();
-                            const hasAvailableSlots = getAvailableTimeSlots(date).length > 0;
+                            const hasAvailableSlots = getAvailableTimeSlots(date, availability).length > 0;
+                            const isBlockedByLimits = !hasAvailableSlots && isDateBlockedByLimits(date);
+                            const label = hasAvailableSlots ? formatted.month : isBlockedByLimits ? 'Limite' : 'N/D';
                             return (
                               <button
                                 key={date.toISOString()}
@@ -482,9 +591,9 @@ function NewAppointmentContent() {
                                       : 'border-border bg-background hover:border-primary/50'
                                 }`}
                               >
-                                <span className="text-xs font-medium">{formatted.day}</span>
+                                <span className="text-sm font-medium">{formatted.day}</span>
                                 <span className="text-lg font-bold">{formatted.date}</span>
-                                <span className="text-xs">{formatted.month}</span>
+                                <span className="text-sm">{label}</span>
                               </button>
                             );
                           })}
@@ -497,14 +606,14 @@ function NewAppointmentContent() {
                           <div className="py-8 text-center text-sm text-muted-foreground">
                             Seleziona una data per vedere gli orari disponibili
                           </div>
-                        ) : getAvailableTimeSlots(selectedDate).length === 0 ? (
+                        ) : getAvailableTimeSlots(selectedDate, availability).length === 0 ? (
                           <div className="py-8 text-center text-sm text-muted-foreground">
                             Nessuno slot disponibile per questa data
                           </div>
                         ) : (
-                          <div className="grid max-h-[300px] grid-cols-3 gap-2 overflow-y-auto">
-                            {getAvailableTimeSlots(selectedDate).map((time) => {
-                              const isUnavailable = isSlotUnavailable(selectedDate, time);
+                          <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                            {getAvailableTimeSlots(selectedDate, availability).map((time) => {
+                              const isUnavailable = isSlotUnavailable(selectedDate, time, availability);
                               const isSelected = selectedTime === time;
                               return (
                                 <button
@@ -562,7 +671,7 @@ function NewAppointmentContent() {
         </Card>
 
         {/* Summary Card */}
-        {(selectedStore || selectedService || selectedBarber || (selectedDate && selectedTime)) && (
+        {(selectedStore || selectedBarber || selectedService || (selectedDate && selectedTime)) && (
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="text-lg">Riepilogo Prenotazione</CardTitle>
@@ -579,6 +688,17 @@ function NewAppointmentContent() {
                   </span>
                 </div>
               )}
+              {selectedBarber && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Barbiere:</span>
+                  <span className="font-medium">
+                    {(() => {
+                      const barber = barbers.find((b) => b.id === selectedBarber);
+                      return barber ? `${barber.firstName} ${barber.lastName}` : selectedBarber;
+                    })()}
+                  </span>
+                </div>
+              )}
               {selectedService && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Servizio:</span>
@@ -587,13 +707,22 @@ function NewAppointmentContent() {
                   </span>
                 </div>
               )}
-              {selectedBarber && (
+              {selectedService && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Barbiere:</span>
+                  <span className="text-muted-foreground">Prezzo:</span>
                   <span className="font-medium">
                     {(() => {
-                      const barber = barbers.find((b) => b.id === selectedBarber);
-                      return barber ? `${barber.firstName} ${barber.lastName}` : selectedBarber;
+                      const service = services.find((s) => s.id === selectedService);
+                      if (!service) return '€0.00';
+                      if (service.discountedPrice) {
+                        return (
+                          <>
+                            <span className="line-through text-muted-foreground mr-2">€{service.price.toFixed(2)}</span>
+                            <span className="text-green-600">€{service.discountedPrice.toFixed(2)}</span>
+                          </>
+                        );
+                      }
+                      return `€${service.price.toFixed(2)}`;
                     })()}
                   </span>
                 </div>

@@ -8,6 +8,29 @@ class AppointmentService extends BaseService<Appointment> {
     super(prisma.appointment);
   }
 
+  // Override getById to not filter by deletedAt (Appointment model doesn't have it)
+  async getById(id: string): Promise<ApiResponse<Appointment>> {
+    try {
+      const data = await prisma.appointment.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          barber: true,
+          service: true,
+          store: true,
+        },
+      });
+
+      if (!data) {
+        return { data: null, error: 'Record not found' };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   async getByCustomerId(customerId: string): Promise<ApiResponse<Appointment[]>> {
     try {
       const appointments = await prisma.appointment.findMany({
@@ -120,6 +143,19 @@ class AppointmentService extends BaseService<Appointment> {
       });
 
       return { data: appointments, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  // Override delete to actually delete (not soft delete, since Appointment doesn't have deletedAt)
+  async delete(id: string): Promise<ApiResponse<void>> {
+    try {
+      await prisma.appointment.delete({
+        where: { id },
+      });
+
+      return { data: null, error: null };
     } catch (error) {
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
     }

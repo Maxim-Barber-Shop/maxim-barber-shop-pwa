@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/middleware';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { userService } from '@/lib/api';
 
 // GET /api/barbers - Get all barbers (accessible to all authenticated users)
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
-    const { data, error } = await userService.getBarbers();
+    const searchParams = request.nextUrl.searchParams;
+    const storeId = searchParams.get('storeId') || undefined;
+    const excludeAdmin = searchParams.get('excludeAdmin') === 'true';
+
+    const { data, error } = await userService.getBarbers(storeId, excludeAdmin);
 
     if (error) {
       return NextResponse.json({ data: null, error }, { status: 500 });

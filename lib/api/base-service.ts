@@ -16,6 +16,7 @@ export class BaseService<T extends { id: string }> {
       const take = pagination?.pageSize;
 
       const data = await this.model.findMany({
+        where: { deletedAt: null },
         ...(orderBy && { orderBy }),
         ...(skip !== undefined && { skip }),
         ...(take && { take }),
@@ -29,8 +30,8 @@ export class BaseService<T extends { id: string }> {
 
   async getById(id: string): Promise<ApiResponse<T>> {
     try {
-      const data = await this.model.findUnique({
-        where: { id },
+      const data = await this.model.findFirst({
+        where: { id, deletedAt: null },
       });
 
       if (!data) {
@@ -43,7 +44,7 @@ export class BaseService<T extends { id: string }> {
     }
   }
 
-  async create(item: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<T>> {
+  async create(item: Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<ApiResponse<T>> {
     try {
       const data = await this.model.create({
         data: item,
@@ -55,7 +56,10 @@ export class BaseService<T extends { id: string }> {
     }
   }
 
-  async update(id: string, updates: Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>): Promise<ApiResponse<T>> {
+  async update(
+    id: string,
+    updates: Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>>,
+  ): Promise<ApiResponse<T>> {
     try {
       const data = await this.model.update({
         where: { id },
@@ -70,8 +74,10 @@ export class BaseService<T extends { id: string }> {
 
   async delete(id: string): Promise<ApiResponse<void>> {
     try {
-      await this.model.delete({
+      // Soft delete: set deletedAt to current timestamp
+      await this.model.update({
         where: { id },
+        data: { deletedAt: new Date() },
       });
 
       return { data: null, error: null };
@@ -82,7 +88,12 @@ export class BaseService<T extends { id: string }> {
 
   async count(where?: any): Promise<ApiResponse<number>> {
     try {
-      const count = await this.model.count({ where });
+      const count = await this.model.count({
+        where: {
+          deletedAt: null,
+          ...where,
+        },
+      });
       return { data: count, error: null };
     } catch (error) {
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };

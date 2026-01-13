@@ -10,7 +10,7 @@ function CustomerDashboardContent() {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[calc(100vh-153px)] bg-background">
       {/* Main Content */}
       <main className="container mx-auto px-4 py-4">
         <div className="mb-8">
@@ -38,9 +38,9 @@ function CustomerDashboardContent() {
           >
             <div className="flex items-center gap-3 mb-4">
               <Calendar className="h-6 w-6 text-foreground" />
-              <h3 className="text-xl font-bold text-foreground">Appuntamenti</h3>
+              <h3 className="text-xl font-bold text-foreground">Appuntamenti prenotati</h3>
             </div>
-            <p className="text-sm text-muted-foreground">Gestisci prenotazioni</p>
+            <p className="text-sm text-muted-foreground">Gestisci Prenotazioni</p>
           </button>
 
           {/* Profilo */}

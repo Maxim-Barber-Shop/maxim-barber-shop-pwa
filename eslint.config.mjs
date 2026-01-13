@@ -19,6 +19,8 @@ export default [
       '!eslint.config.mjs',
       'components/ui/**',
       'next-env.d.ts',
+      'scripts/**',
+      'prisma/**',
     ],
   },
   js.configs.recommended,

@@ -8,13 +8,18 @@ class StoreService extends BaseService<Store> {
     super(prisma.store);
   }
 
-  async getWithHours(storeId: string): Promise<ApiResponse<Store & { hours: unknown[] }>> {
+  async getWithHours(storeId: string): Promise<ApiResponse<Store & { barberWeeklyHours: unknown[] }>> {
     try {
-      const store = await prisma.store.findUnique({
-        where: { id: storeId },
+      const store = await prisma.store.findFirst({
+        where: { id: storeId, deletedAt: null },
         include: {
-          hours: {
+          barberWeeklyHours: {
             orderBy: { dayOfWeek: 'asc' },
+            include: {
+              barber: {
+                select: { firstName: true, lastName: true },
+              },
+            },
           },
         },
       });
@@ -23,24 +28,30 @@ class StoreService extends BaseService<Store> {
         return { data: null, error: 'Store not found' };
       }
 
-      return { data: store as Store & { hours: unknown[] }, error: null };
+      return { data: store as Store & { barberWeeklyHours: unknown[] }, error: null };
     } catch (error) {
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
-  async getAllWithHours(): Promise<ApiResponse<Array<Store & { hours: unknown[] }>>> {
+  async getAllWithHours(): Promise<ApiResponse<Array<Store & { barberWeeklyHours: unknown[] }>>> {
     try {
       const stores = await prisma.store.findMany({
+        where: { deletedAt: null },
         include: {
-          hours: {
+          barberWeeklyHours: {
             orderBy: { dayOfWeek: 'asc' },
+            include: {
+              barber: {
+                select: { firstName: true, lastName: true },
+              },
+            },
           },
         },
         orderBy: { name: 'asc' },
       });
 
-      return { data: stores as Array<Store & { hours: unknown[] }>, error: null };
+      return { data: stores as Array<Store & { barberWeeklyHours: unknown[] }>, error: null };
     } catch (error) {
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
     }
@@ -50,6 +61,7 @@ class StoreService extends BaseService<Store> {
     try {
       const stores = await prisma.store.findMany({
         where: {
+          deletedAt: null,
           address: {
             contains: city,
             mode: 'insensitive',

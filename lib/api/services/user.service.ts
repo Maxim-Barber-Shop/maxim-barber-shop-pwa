@@ -12,7 +12,7 @@ class UserService extends BaseService<User> {
   async getByPhone(phone: string): Promise<ApiResponse<User>> {
     try {
       const user = await prisma.user.findFirst({
-        where: { phone },
+        where: { phone, deletedAt: null },
       });
 
       if (!user) {
@@ -29,6 +29,7 @@ class UserService extends BaseService<User> {
     try {
       const users = await prisma.user.findMany({
         where: {
+          deletedAt: null,
           OR: [
             { firstName: { contains: searchTerm, mode: 'insensitive' } },
             { lastName: { contains: searchTerm, mode: 'insensitive' } },
@@ -45,7 +46,7 @@ class UserService extends BaseService<User> {
   async getByRole(role: UserRole): Promise<ApiResponse<User[]>> {
     try {
       const users = await prisma.user.findMany({
-        where: { role },
+        where: { role, deletedAt: null },
         orderBy: { firstName: 'asc' },
       });
 
@@ -55,8 +56,53 @@ class UserService extends BaseService<User> {
     }
   }
 
-  async getBarbers(): Promise<ApiResponse<User[]>> {
-    return this.getByRole('BARBER');
+  async getBarbers(storeId?: string, excludeAdmin: boolean = false): Promise<ApiResponse<User[]>> {
+    try {
+      // If storeId is provided, we need to filter barbers who have hours at this store
+      // Include admins unless explicitly excluded
+      if (storeId) {
+        if (excludeAdmin) {
+          // Only barbers with hours at this store
+          const barbers = await prisma.user.findMany({
+            where: {
+              role: 'BARBER' as UserRole,
+              deletedAt: null,
+              barberWeeklyHours: {
+                some: { storeId },
+              },
+            },
+            orderBy: { firstName: 'asc' },
+          });
+          return { data: barbers, error: null };
+        } else {
+          // Include both admins and barbers who have hours at this store
+          const barbers = await prisma.user.findMany({
+            where: {
+              deletedAt: null,
+              role: { in: ['BARBER', 'ADMIN'] as UserRole[] },
+              barberWeeklyHours: {
+                some: { storeId },
+              },
+            },
+            orderBy: { firstName: 'asc' },
+          });
+          return { data: barbers, error: null };
+        }
+      }
+
+      // If no storeId, return all barbers (and admins unless excluded)
+      const barbers = await prisma.user.findMany({
+        where: {
+          role: excludeAdmin ? ('BARBER' as UserRole) : { in: ['BARBER', 'ADMIN'] as UserRole[] },
+          deletedAt: null,
+        },
+        orderBy: { firstName: 'asc' },
+      });
+
+      return { data: barbers, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   async getCustomers(): Promise<ApiResponse<User[]>> {
@@ -64,7 +110,7 @@ class UserService extends BaseService<User> {
   }
 
   // Override create to hash password before saving
-  async create(item: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<User>> {
+  async create(item: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<ApiResponse<User>> {
     try {
       // Hash the password before saving
       const hashedPassword = await bcrypt.hash(item.password, 10);

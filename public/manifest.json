@@ -4,8 +4,8 @@
   "description": "Prenota il tuo appuntamento presso Maxim Barber Shop",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1a1a",
-  "theme_color": "#4169e1",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait-primary",
   "icons": [
     {

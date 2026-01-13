@@ -7,13 +7,23 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
     const barberId = searchParams.get('barberId');
+    const category = searchParams.get('category');
     const minPrice = searchParams.get('minPrice');
     const maxPrice = searchParams.get('maxPrice');
     const maxDuration = searchParams.get('maxDuration');
 
-    // Filter by barber
+    // Filter by barber (optionally also by category)
     if (barberId) {
-      const { data, error } = await serviceService.getByBarber(barberId);
+      const { data, error } = await serviceService.getByBarber(barberId, category || undefined);
+      if (error) {
+        return NextResponse.json({ error }, { status: 500 });
+      }
+      return NextResponse.json({ data });
+    }
+
+    // Filter by category only
+    if (category) {
+      const { data, error } = await serviceService.getByCategory(category);
       if (error) {
         return NextResponse.json({ error }, { status: 500 });
       }
@@ -59,20 +69,28 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
   }
 });
 
-// POST /api/services - Create a new service
-export const POST = withRole(['ADMIN', 'BARBER'], async (request: AuthenticatedRequest) => {
+// POST /api/services - Create a new service (ADMIN only)
+export const POST = withRole(['ADMIN'], async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
-    const { name, durationMinutes, price } = body;
+    const { name, description, durationMinutes, price, discountedPrice, category, barberId, storeId } = body;
 
-    if (!name || !durationMinutes || price === undefined) {
-      return NextResponse.json({ error: 'name, durationMinutes, and price are required' }, { status: 400 });
+    if (!name || !durationMinutes || price === undefined || !barberId || !storeId) {
+      return NextResponse.json(
+        { error: 'name, durationMinutes, price, barberId, and storeId are required' },
+        { status: 400 },
+      );
     }
 
     const { data, error } = await serviceService.create({
       name,
+      description: description || null,
       durationMinutes: parseInt(durationMinutes),
       price: parseFloat(price),
+      discountedPrice: discountedPrice ? parseFloat(discountedPrice) : null,
+      category: category || 'CAPELLI',
+      barberId,
+      storeId,
     });
 
     if (error) {

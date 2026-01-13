@@ -16,10 +16,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'La password deve essere di almeno 6 caratteri' }, { status: 400 });
     }
 
+    // Add +39 prefix if not already present
+    let formattedPhone = phone.replace(/\s/g, ''); // Remove spaces
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+39' + formattedPhone;
+    }
+
     const { data, error } = await authService.register({
       firstName,
       lastName,
-      phone,
+      phone: formattedPhone,
       password,
     });
 

@@ -2,27 +2,27 @@
 
 import { BottomNav, NavItem } from '@/components/bottom-nav';
 import { TopBar } from '@/components/top-bar';
-import { Home, Calendar, Users, User } from 'lucide-react';
+import { Home, Calendar, Clock, User } from 'lucide-react';
 
 const barberNavItems: NavItem[] = [
   {
-    label: 'Home',
-    icon: <Home className="h-5 w-5" />,
+    label: 'Oggi',
+    icon: <Home className="h-6 w-6" />,
     href: '/barber/dashboard',
   },
   {
-    label: 'Appuntamenti',
-    icon: <Calendar className="h-5 w-5" />,
-    href: '/barber/appointments',
+    label: 'Calendario',
+    icon: <Calendar className="h-6 w-6" />,
+    href: '/barber/calendar',
   },
   {
-    label: 'Clienti',
-    icon: <Users className="h-5 w-5" />,
-    href: '/barber/clients',
+    label: 'Turni',
+    icon: <Clock className="h-6 w-6" />,
+    href: '/barber/shifts',
   },
   {
     label: 'Profilo',
-    icon: <User className="h-5 w-5" />,
+    icon: <User className="h-6 w-6" />,
     href: '/barber/profile',
   },
 ];
@@ -31,7 +31,7 @@ export default function BarberLayout({ children }: { children: React.ReactNode }
   return (
     <>
       <TopBar />
-      <div className="pb-16 pt-22.25">{children}</div>
+      <div className="pb-20 pt-[89px]">{children}</div>
       <BottomNav items={barberNavItems} />
     </>
   );

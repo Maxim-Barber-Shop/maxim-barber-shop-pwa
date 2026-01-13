@@ -33,16 +33,92 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       return NextResponse.json({ data: null, error: 'Service not found' }, { status: 404 });
     }
 
-    // Get store hours
-    const storeHours = await prisma.storeHour.findMany({
-      where: { storeId },
+    // CHECK BOOKING LIMITS FOR CUSTOMER
+    let customerBookingLimits: Map<string, { canBookWeek: boolean; canBookMonth: boolean }> | null = null;
+    if (request.user?.role === 'CUSTOMER') {
+      const customerId = request.user.userId;
+
+      // Get booking limits from settings
+      const weeklyLimitSetting = await prisma.settings.findUnique({
+        where: { key: 'booking_limit_per_week' },
+      });
+      const monthlyLimitSetting = await prisma.settings.findUnique({
+        where: { key: 'booking_limit_per_month' },
+      });
+
+      const weeklyLimit = weeklyLimitSetting ? parseInt(weeklyLimitSetting.value) : 1;
+      const monthlyLimit = monthlyLimitSetting ? parseInt(monthlyLimitSetting.value) : 2;
+
+      // Get customer's existing appointments
+      const customerAppointments = await prisma.appointment.findMany({
+        where: {
+          customerId,
+          status: { in: ['CONFIRMED', 'COMPLETED'] },
+        },
+      });
+
+      // Build a map of dates with booking availability
+      customerBookingLimits = new Map();
+
+      const tempDate = new Date(startDate);
+      while (tempDate <= endDate) {
+        const dateStr = tempDate.toISOString().split('T')[0];
+
+        // Check weekly limit
+        const weekStart = new Date(tempDate);
+        weekStart.setDate(tempDate.getDate() - tempDate.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 7);
+
+        const appointmentsThisWeek = customerAppointments.filter((apt) => {
+          const aptDate = new Date(apt.startTime);
+          return aptDate >= weekStart && aptDate < weekEnd;
+        });
+
+        const canBookWeek = appointmentsThisWeek.length < weeklyLimit;
+
+        // Check monthly limit
+        const monthStart = new Date(tempDate.getFullYear(), tempDate.getMonth(), 1);
+        const monthEnd = new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 0, 23, 59, 59);
+
+        const appointmentsThisMonth = customerAppointments.filter((apt) => {
+          const aptDate = new Date(apt.startTime);
+          return aptDate >= monthStart && aptDate <= monthEnd;
+        });
+
+        const canBookMonth = appointmentsThisMonth.length < monthlyLimit;
+
+        customerBookingLimits.set(dateStr, { canBookWeek, canBookMonth });
+
+        tempDate.setDate(tempDate.getDate() + 1);
+      }
+    }
+
+    // Get barber hours - this determines availability
+    // If specific barber is selected, get only their hours
+    // Otherwise, get all barber hours at this store (to show when store has any availability)
+    const barberHours = await prisma.barberWeeklyHour.findMany({
+      where: {
+        storeId,
+        ...(barberId && barberId !== 'any' ? { barberId } : {}),
+      },
     });
 
-    // Get barber hours if specific barber is selected
-    let barberHours = null;
+    // Get barber time-off periods if specific barber is selected
+    let barberTimeOff = null;
     if (barberId && barberId !== 'any') {
-      barberHours = await prisma.barberWeeklyHour.findMany({
-        where: { barberId },
+      barberTimeOff = await prisma.barberTimeOff.findMany({
+        where: {
+          barberId,
+          OR: [
+            {
+              startDate: { lte: endDate },
+              endDate: { gte: startDate },
+            },
+          ],
+        },
       });
     }
 
@@ -57,25 +133,21 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       },
     });
 
-    // Generate time slots
+    // Smart slot generation: only show slots in actually available time windows
     const slots: AvailabilitySlot[] = [];
-    const timeSlots = [
-      '09:00',
-      '09:30',
-      '10:00',
-      '10:30',
-      '11:00',
-      '11:30',
-      '14:00',
-      '14:30',
-      '15:00',
-      '15:30',
-      '16:00',
-      '16:30',
-      '17:00',
-      '17:30',
-      '18:00',
-    ];
+    const SLOT_INTERVAL_MINUTES = 30;
+
+    // Helper: convert time to minutes since midnight
+    const timeToMinutes = (date: Date) => date.getHours() * 60 + date.getMinutes();
+
+    // Helper: format minutes to HH:MM
+    const minutesToTime = (minutes: number) => {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    };
+
+    const now = new Date();
 
     // Iterate through each day in the range
     const currentDate = new Date(startDate);
@@ -83,63 +155,141 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       const dayOfWeek = currentDate.getDay();
       const dateStr = currentDate.toISOString().split('T')[0];
 
-      // Check if store is open on this day
-      const storeHour = storeHours.find((h) => h.dayOfWeek === dayOfWeek);
-      if (!storeHour) {
-        // Store closed on this day
-        timeSlots.forEach((time) => {
-          slots.push({ date: dateStr, time, available: false });
-        });
-      } else {
-        // Check each time slot
-        for (const time of timeSlots) {
-          const [hours, minutes] = time.split(':').map(Number);
-          const slotStart = new Date(currentDate);
-          slotStart.setHours(hours, minutes, 0, 0);
+      // Check customer booking limits
+      if (customerBookingLimits) {
+        const limits = customerBookingLimits.get(dateStr);
+        if (limits && (!limits.canBookWeek || !limits.canBookMonth)) {
+          // Customer has reached limits for this date - skip
+          currentDate.setDate(currentDate.getDate() + 1);
+          continue;
+        }
+      }
 
-          const slotEnd = new Date(slotStart);
-          slotEnd.setMinutes(slotEnd.getMinutes() + service.durationMinutes);
+      // Get barber hours for this day (can have multiple blocks: morning/afternoon)
+      const dayBarberHours = barberHours.filter((h) => h.dayOfWeek === dayOfWeek);
+      if (dayBarberHours.length === 0) {
+        // No barber working this day - no slots
+        currentDate.setDate(currentDate.getDate() + 1);
+        continue;
+      }
 
-          // Check if slot is within store hours
-          const storeOpen = new Date(storeHour.openTime);
-          const storeClose = new Date(storeHour.closeTime);
-          const slotTime = hours * 60 + minutes;
-          const openTime = storeOpen.getHours() * 60 + storeOpen.getMinutes();
-          const closeTime = storeClose.getHours() * 60 + storeClose.getMinutes();
+      // Build working blocks directly from barber hours
+      const workingBlocks: Array<{ start: number; end: number }> = [];
 
-          let available = slotTime >= openTime && slotTime + service.durationMinutes <= closeTime;
+      for (const barberHour of dayBarberHours) {
+        const barberStart = timeToMinutes(new Date(barberHour.startTime));
+        const barberEnd = timeToMinutes(new Date(barberHour.endTime));
+        workingBlocks.push({ start: barberStart, end: barberEnd });
+      }
 
-          // Check if barber is available (if specific barber selected)
-          if (available && barberHours) {
-            const barberHour = barberHours.find((h) => h.dayOfWeek === dayOfWeek);
-            if (!barberHour) {
-              available = false;
-            } else {
-              const barberStart = new Date(barberHour.startTime);
-              const barberEnd = new Date(barberHour.endTime);
-              const barberStartTime = barberStart.getHours() * 60 + barberStart.getMinutes();
-              const barberEndTime = barberEnd.getHours() * 60 + barberEnd.getMinutes();
+      // Build list of busy periods from existing appointments
+      const busyPeriods: Array<{ start: number; end: number }> = existingAppointments
+        .filter((apt) => {
+          const aptDate = new Date(apt.startTime).toISOString().split('T')[0];
+          return aptDate === dateStr;
+        })
+        .map((apt) => ({
+          start: timeToMinutes(new Date(apt.startTime)),
+          end: timeToMinutes(new Date(apt.endTime)),
+        }))
+        .sort((a, b) => a.start - b.start);
 
-              available = slotTime >= barberStartTime && slotTime + service.durationMinutes <= barberEndTime;
+      // Add barber time-off periods as busy slots
+      if (barberTimeOff) {
+        for (const timeOff of barberTimeOff) {
+          const timeOffStart = new Date(timeOff.startDate);
+          const timeOffEnd = new Date(timeOff.endDate);
+          const dayStart = new Date(currentDate);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(currentDate);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          // If time-off overlaps with this day
+          if (timeOffStart <= dayEnd && timeOffEnd >= dayStart) {
+            // Calculate actual blocked time for this specific day
+            let blockStartMinutes = 0;
+            let blockEndMinutes = 24 * 60;
+
+            // If time-off starts on this day, use its specific time
+            if (timeOffStart >= dayStart && timeOffStart <= dayEnd) {
+              blockStartMinutes = timeToMinutes(timeOffStart);
             }
+
+            // If time-off ends on this day, use its specific time
+            if (timeOffEnd >= dayStart && timeOffEnd <= dayEnd) {
+              blockEndMinutes = timeToMinutes(timeOffEnd);
+            }
+
+            busyPeriods.push({ start: blockStartMinutes, end: blockEndMinutes });
+          }
+        }
+      }
+
+      busyPeriods.sort((a, b) => a.start - b.start);
+
+      // Process each working block separately
+      for (const workBlock of workingBlocks) {
+        // Find free windows within this working block
+        const freeWindows: Array<{ start: number; end: number }> = [];
+        let currentStart = workBlock.start;
+
+        for (const busy of busyPeriods) {
+          // Only consider busy periods that overlap with this working block
+          if (busy.end <= workBlock.start || busy.start >= workBlock.end) {
+            continue; // No overlap
           }
 
-          // Check for conflicts with existing appointments
-          if (available) {
-            const hasConflict = existingAppointments.some((appointment) => {
-              const appointmentStart = new Date(appointment.startTime);
-              const appointmentEnd = new Date(appointment.endTime);
-
-              // Check if there's any overlap
-              return slotStart < appointmentEnd && slotEnd > appointmentStart;
+          // If there's a gap before this busy period
+          if (currentStart < busy.start) {
+            freeWindows.push({
+              start: currentStart,
+              end: Math.min(busy.start, workBlock.end),
             });
+          }
+          currentStart = Math.max(currentStart, busy.end);
+        }
 
-            if (hasConflict) {
-              available = false;
+        // Add final window if there's time after last busy period
+        if (currentStart < workBlock.end) {
+          freeWindows.push({ start: currentStart, end: workBlock.end });
+        }
+
+        // Generate slots in each free window
+        for (const window of freeWindows) {
+          const windowDuration = window.end - window.start;
+
+          // Only generate slots if window is big enough for the service
+          if (windowDuration >= service.durationMinutes) {
+            // Allow slots to exceed closing time by max 30 minutes
+            const MAX_OVERTIME_MINUTES = 30;
+            const lastPossibleStart = window.end + MAX_OVERTIME_MINUTES - service.durationMinutes;
+
+            for (
+              let slotMinutes = window.start;
+              slotMinutes <= lastPossibleStart;
+              slotMinutes += SLOT_INTERVAL_MINUTES
+            ) {
+              const slotTime = minutesToTime(slotMinutes);
+              const slotStart = new Date(currentDate);
+              const [hours, minutes] = slotTime.split(':').map(Number);
+              slotStart.setHours(hours, minutes, 0, 0);
+
+              // Verify service doesn't exceed closing time + 30 min
+              const slotEndMinutes = slotMinutes + service.durationMinutes;
+              if (slotEndMinutes > workBlock.end + MAX_OVERTIME_MINUTES) {
+                continue; // Skip this slot, would exceed max overtime
+              }
+
+              // Check if slot is in the past
+              const isPast = slotStart < now;
+
+              slots.push({
+                date: dateStr,
+                time: slotTime,
+                available: !isPast,
+              });
             }
           }
-
-          slots.push({ date: dateStr, time, available });
         }
       }
 

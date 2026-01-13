@@ -26,6 +26,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Convert numeric fields if present
     if (body.durationMinutes) body.durationMinutes = parseInt(body.durationMinutes);
     if (body.price) body.price = parseFloat(body.price);
+    if (body.discountedPrice !== undefined) {
+      body.discountedPrice = body.discountedPrice ? parseFloat(body.discountedPrice) : null;
+    }
 
     const { data, error } = await serviceService.update(id, body);
 

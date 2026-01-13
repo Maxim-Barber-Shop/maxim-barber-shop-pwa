@@ -23,6 +23,12 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum ServiceCategory {
+  CAPELLI
+  BARBA
+  COMBO
+}
+
 model User {
   id          String   @id @default(uuid())
   firstName   String
@@ -31,37 +37,36 @@ model User {
   password    String
   role        UserRole @default(CUSTOMER)
 
-  appointments       Appointment[] @relation("CustomerAppointments")
-  barberAppointments Appointment[] @relation("BarberAppointments")
-  barberServices     BarberService[]
+  appointments       Appointment[]      @relation("CustomerAppointments")
+  barberAppointments Appointment[]      @relation("BarberAppointments")
+  services           Service[]          @relation("BarberServices")
   barberWeeklyHours  BarberWeeklyHour[]
   barberTimeOff      BarberTimeOff[]
+  blacklistEntries   Blacklist[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model Service {
-  id              String   @id @default(uuid())
+  id              String          @id @default(uuid())
   name            String
+  description     String?
   durationMinutes Int
   price           Float
+  discountedPrice Float?
+  category        ServiceCategory @default(CAPELLI)
+  barberId        String
+  storeId         String
 
-  barbers      BarberService[]
+  barber       User          @relation("BarberServices", fields: [barberId], references: [id], onDelete: Cascade)
+  store        Store         @relation("StoreServices", fields: [storeId], references: [id], onDelete: Cascade)
   appointments Appointment[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model BarberService {
-  barberId  String
-  serviceId String
-
-  barber  User    @relation(fields: [barberId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
-
-  @@id([barberId, serviceId])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model Store {
@@ -69,31 +74,25 @@ model Store {
   name    String
   address String
 
-  hours        StoreHour[]
-  appointments Appointment[]
+  appointments      Appointment[]
+  barberWeeklyHours BarberWeeklyHour[]
+  services          Service[]          @relation("StoreServices")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model StoreHour {
-  id        String   @id @default(uuid())
-  storeId  String
-  dayOfWeek Int      // 0 = Sunday, 6 = Saturday
-  openTime  DateTime
-  closeTime DateTime
-
-  store Store @relation(fields: [storeId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 }
 
 model BarberWeeklyHour {
   id        String   @id @default(uuid())
   barberId  String
+  storeId   String
   dayOfWeek Int      // 0 = Sunday, 6 = Saturday
   startTime DateTime
   endTime   DateTime
 
-  barber User @relation(fields: [barberId], references: [id])
+  barber User  @relation(fields: [barberId], references: [id])
+  store  Store @relation(fields: [storeId], references: [id])
 }
 
 model BarberTimeOff {
@@ -123,6 +122,31 @@ model Appointment {
   barber   User     @relation("BarberAppointments", fields: [barberId], references: [id])
   service  Service  @relation(fields: [serviceId], references: [id])
   store    Store    @relation(fields: [storeId], references: [id])
+
+  blacklistEntry Blacklist?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Blacklist {
+  id            String   @id @default(uuid())
+  customerId    String
+  appointmentId String   @unique
+  reason        String
+  notes         String?
+
+  customer    User        @relation(fields: [customerId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Settings {
+  id                    String   @id @default(uuid())
+  key                   String   @unique
+  value                 String
+  description           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
